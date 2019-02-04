@@ -59,11 +59,10 @@ func CORS(options ...Options) macaron.Handler {
 		headers := map[string]string{
 			"access-control-allow-methods": "POST,GET,OPTIONS,PUT,PATCH,DELETE",
 			"access-control-allow-headers": ctx.Req.Header.Get("access-control-request-headers"),
-		}
-		if reqOptions {
-			// cache options response for 24h
-			// ref: https://www.fastly.com/blog/caching-cors
-			headers["cache-control"] = "max-age=86400"
+			// cache options response for 600 secs
+			// ref: https://stackoverflow.com/questions/54300997/is-it-possible-to-cache-http-options-response?noredirect=1#comment95790277_54300997
+			// ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Access-Control-Max-Age
+			"access-control-max-age": "600",
 		}
 		if opt.AllowDomain == "*" {
 			headers["access-control-allow-origin"] = "*"
