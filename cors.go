@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	macaron "gopkg.in/macaron.v1"
@@ -18,10 +19,13 @@ func Version() string {
 
 // Options represents a struct for specifying configuration options for the CORS middleware.
 type Options struct {
-	Section        string
-	Scheme         string
-	AllowDomain    string
-	AllowSubdomain bool
+	Section          string
+	Scheme           string
+	AllowDomain      string
+	AllowSubdomain   bool
+	Methods          []string
+	MaxAgeSeconds    int
+	AllowCredentials bool
 }
 
 func prepareOptions(options []Options) Options {
@@ -44,6 +48,29 @@ func prepareOptions(options []Options) Options {
 	if !opt.AllowSubdomain {
 		opt.AllowSubdomain = sec.Key("ALLOW_SUBDOMAIN").MustBool(false)
 	}
+	if len(opt.Methods) == 0 {
+		opt.Methods = sec.Key("METHODS").Strings(",")
+		if len(opt.Methods) == 0 {
+			opt.Methods = []string{
+				http.MethodGet,
+				http.MethodHead,
+				http.MethodPost,
+				http.MethodPut,
+				http.MethodPatch,
+				http.MethodDelete,
+				http.MethodOptions,
+			}
+		}
+	}
+	if opt.MaxAgeSeconds <= 0 {
+		// cache options response for 600 secs
+		// ref: https://stackoverflow.com/questions/54300997/is-it-possible-to-cache-http-options-response?noredirect=1#comment95790277_54300997
+		// ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Access-Control-Max-Age
+		opt.MaxAgeSeconds = sec.Key("MAX_AGE_SECONDS").MustInt(600)
+	}
+	if !opt.AllowCredentials {
+		opt.AllowCredentials = sec.Key("ALLOW_CREDENTIALS").MustBool(true)
+	}
 
 	return opt
 }
@@ -57,12 +84,9 @@ func CORS(options ...Options) macaron.Handler {
 		reqOptions := ctx.Req.Method == http.MethodOptions
 
 		headers := map[string]string{
-			"access-control-allow-methods": "POST,GET,OPTIONS,PUT,PATCH,DELETE",
+			"access-control-allow-methods": strings.Join(opt.Methods, ","),
 			"access-control-allow-headers": ctx.Req.Header.Get("access-control-request-headers"),
-			// cache options response for 600 secs
-			// ref: https://stackoverflow.com/questions/54300997/is-it-possible-to-cache-http-options-response?noredirect=1#comment95790277_54300997
-			// ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Access-Control-Max-Age
-			"access-control-max-age": "600",
+			"access-control-max-age":       strconv.Itoa(opt.MaxAgeSeconds),
 		}
 		if opt.AllowDomain == "*" {
 			headers["access-control-allow-origin"] = "*"
@@ -84,7 +108,7 @@ func CORS(options ...Options) macaron.Handler {
 			if ok {
 				u.Scheme = opt.Scheme
 				headers["access-control-allow-origin"] = u.String()
-				headers["access-control-allow-credentials"] = "true"
+				headers["access-control-allow-credentials"] = strconv.FormatBool(opt.AllowCredentials)
 				headers["vary"] = "Origin"
 			}
 			if reqOptions && !ok {
