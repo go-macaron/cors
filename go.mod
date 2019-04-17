@@ -1,4 +1,4 @@
-module github.com/tamalsaha/cors
+module github.com/go-macaron/cors
 
 require (
 	github.com/Unknwon/com v0.0.0-20181010210213-41959bdd855f // indirect
